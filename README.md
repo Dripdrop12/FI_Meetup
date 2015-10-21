@@ -1,5 +1,5 @@
 # Introduction
-This is a repository for a Data Visualization Meetup in Washington, DC.
+This is a repository for a Data Visualization Meetup in Washington, DC that will be held at FI Consulting, Inc.
 
 ## Goals:
 - To merge data from companies' financial statements filed with at SEC with the CFPB's consumer complaints database using partial text matching on company names.
