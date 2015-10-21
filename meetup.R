@@ -11,7 +11,7 @@ setwd("~/GitHub/FI_Meetup")
 
 # SEC URL #
 sec_url <- function(Year, Quarter){
-    s = tolower(substitute(Quarter))
+    s = tolower(Quarter)
     if(!Year %in% seq(2009, 2015, 1)){
         warning("SEC data is only available between 2009 and 2015")
         return(NA)
@@ -23,57 +23,85 @@ sec_url <- function(Year, Quarter){
     }
 }
 
-# Download SEC Data #
-temp <- tempfile()
-set_url <- sec_url(2015, q2)
-download.file(set_url, temp, mode = "wb")
-unzip(temp) # HARD CODED
-num <- fread("num.txt", stringsAsFactors = F)
-subm <- fread("sub.txt", stringsAsFactors = F)
-datatag <- fread("tag.txt", stringsAsFactors = F)
-pre <- fread("pre.txt", stringsAsFactors = F)
-unlink(temp)
-
-## Note The SEC website folder http://www.sec.gov/Archives/edgar/data/{cik}/{accession}/ 
-## will always contain all the files for a given submission, where {accession} is the adsh 
-## with the characters removed.
-
 # Download Consumer Financial Protection Bureau Data #
 if(!file.exists("cfpb.csv")){
 download.file("http://data.consumerfinance.gov/api/views/s6ew-h6mp/rows.csv", "cfpb.csv")
 } 
 cfpb <- fread("cfpb.csv")
 
-# Remove punctuation, whitespace, and lower case company names #
-subm$name <- subm$name %>% tolower() %>% removePunctuation() %>% stripWhitespace()
-cfpb$Company <- cfpb$Company %>% tolower() %>% removePunctuation() %>% stripWhitespace()
-
-# Replace the CFPB name for Citi with the SEC name #
-cfpb$Company <- gsub("citibank", "citigroup", cfpb$Company)
-
-# remove states and other endings from company names #
-state <- tolower(unique(subm$stprba))
+# Specify states and other endings to remove from the end of company names #
+state <- tolower(unique(cfpb$State))
 legal_entity <- c("inc", "corp", "co", "plc", "ltd", "llc", 
                   "company", "companymn", "holdings", "financial services", "services", 
                   "financial", "corporation", "group", "bank", "banks")
 endings <- c(state, legal_entity)
+rm(list=c("state", "legal_entity"))
 
-## CFPB ##
+# Remove punctuation, whitespace, and lower case company names #
+cfpb$Company <- cfpb$Company %>% tolower() %>% removePunctuation() %>% stripWhitespace()
+# Replace the CFPB name for Citi with the SEC name #
+cfpb$Company <- gsub("citibank", "citigroup", cfpb$Company)
+
+## Remove endings from CFPB companies ##
 for (i in 1:length(endings)){
     cfpb$Company <- gsub(paste(" ", endings[i], "$", sep = ""), "", cfpb$Company)
 }
+companies_of_interest <- unique(cfpb$Company)
 
-## SEC ##
-for (i in 1:length(endings)){
-    subm$name <- gsub(paste(" ", endings[i], "$", sep = ""), "", subm$name)
+# Download SEC Data #
+## Specify the year and quarter of data to download
+## Create a pathway for the SEC database
+Y <- seq(2009, 2015, 1)
+Q <- c("q1", "q2", "q3", "q4")
+merge_percent_companies <- matrix(nrow = length(Y), ncol = length(Q))
+merge_percent_of_complaints <- matrix(nrow = length(Y), ncol = length(Q))
+# Create an SEC database by programatically extracting SEC data relevant to CFPB #
+if(!dir.exists("SEC_database")){
+    dir.create("SEC_database")
 }
-
-# Merge the SEC and CFPB data on cleaned company name #
-both <- merge(x = subm, y = cfpb, by.x = "name", by.y = "Company")
-
-# QC metrics for the merge #
-merge_percent_companies <- length(unique(both$name)) / length(unique(cfpb$Company))
-merge_percent_of_complaints <- sum(cfpb$Company %in% unique(both$name)) / nrow(cfpb)
+SEC_database_path <- paste(getwd(), "/SEC_database", sep="")
+if(getwd() != SEC_database_path){
+    # Set working directory to SEC_database_path
+    setwd(paste(getwd(), "/SEC_database", sep=""))}
+for (i in 1:length(Y)){for (j in 1:length(Q)){
+    # Create a temporary directory and download the data #
+    temp <- tempfile()
+    Ye <- Y[i]
+    Qu <- Q[j]
+    set_url <- sec_url(Ye, Qu)
+    download.file(set_url, temp, mode = "wb")
+    unzip(temp) # HARD CODED
+    num <- fread("num.txt", stringsAsFactors = F)
+    subm <- fread("sub.txt", stringsAsFactors = F)
+    # datatag <- fread("tag.txt", stringsAsFactors = F)
+    # pre <- fread("pre.txt", stringsAsFactors = F)
+    unlink(temp)
+        
+    ## Note The SEC website folder http://www.sec.gov/Archives/edgar/data/{cik}/{accession}/ 
+    ## will always contain all the files for a given submission, where {accession} is the adsh 
+    ## with the characters removed.
+        
+    # Remove punctuation, whitespace, and lower case company names #
+    subm$name <- subm$name %>% tolower() %>% removePunctuation() %>% stripWhitespace()
+        
+    ## Remove endings from SEC companies ##
+    for (k in 1:length(endings)){
+        subm$name <- gsub(paste(" ", endings[k], "$", sep = ""), "", subm$name)
+    }
+    # Merge the SEC and CFPB data on cleaned company name #
+    both <- merge(x = subm, y = cfpb, by.x = "name", by.y = "Company")
+        
+    # QC metrics for the merge #
+    merge_percent_companies[i,j] <- length(unique(both$name)) / length(unique(cfpb$Company))
+    merge_percent_of_complaints[i,j] <- sum(cfpb$Company %in% unique(both$name)) / nrow(cfpb)
+        
+    # Merge and store relevant information in new directory #
+    subm_num <- merge(subm, num, by = "adsh")
+    subm_num <- subm_num %>% filter(name %in% companies_of_interest)
+        
+    write.csv(subm_num, file = paste(Y[i], Q[j], "sub_num.csv", sep = ""))
+    }
+}
 
 # Assets #
 assets <- merge(x = subm[, .(adsh, name)], y = num[num$tag=="Assets", .(adsh, tag, value)], by="adsh")
