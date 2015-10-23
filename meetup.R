@@ -5,6 +5,7 @@ library(data.table)
 library(tm)
 library(ggthemes)
 library(scales)
+library(RColorBrewer)
 
 # Set working directory #
 setwd("~/GitHub/FI_Meetup")
@@ -46,16 +47,22 @@ cfpb$Company <- gsub("citibank", "citigroup", cfpb$Company)
 for (i in 1:length(endings)){
     cfpb$Company <- gsub(paste(" ", endings[i], "$", sep = ""), "", cfpb$Company)
 }
+
+# Store CFPB Companies and clean dataset#
 companies_of_interest <- unique(cfpb$Company)
+write.csv(cfpb, "app/data/cfpb_clean.csv")
 
 # Download SEC Data #
-## Specify the year and quarter of data to download
-## Create a pathway for the SEC database
+# Specify the year and quarter of data to download
 Y <- seq(2009, 2015, 1)
 Q <- c("q1", "q2", "q3", "q4")
+
+# Create QC Metric Buckets 
 merge_percent_companies <- matrix(nrow = length(Y), ncol = length(Q))
 merge_percent_of_complaints <- matrix(nrow = length(Y), ncol = length(Q))
+
 # Create an SEC database by programatically extracting SEC data relevant to CFPB #
+## If the SEC database already exists, this will not overwrite it ##
 if(!dir.exists("SEC_database")){
     dir.create("SEC_database")
 }
@@ -63,60 +70,83 @@ SEC_database_path <- paste(getwd(), "/SEC_database", sep="")
 if(getwd() != SEC_database_path){
     # Set working directory to SEC_database_path
     setwd(paste(getwd(), "/SEC_database", sep=""))}
-for (i in 1:length(Y)){for (j in 1:length(Q)){
-    # Create a temporary directory and download the data #
-    temp <- tempfile()
-    Ye <- Y[i]
-    Qu <- Q[j]
-    set_url <- sec_url(Ye, Qu)
-    download.file(set_url, temp, mode = "wb")
-    unzip(temp) # HARD CODED
-    num <- fread("num.txt", stringsAsFactors = F)
-    subm <- fread("sub.txt", stringsAsFactors = F)
-    # datatag <- fread("tag.txt", stringsAsFactors = F)
-    # pre <- fread("pre.txt", stringsAsFactors = F)
-    unlink(temp)
-        
-    ## Note The SEC website folder http://www.sec.gov/Archives/edgar/data/{cik}/{accession}/ 
-    ## will always contain all the files for a given submission, where {accession} is the adsh 
-    ## with the characters removed.
-        
-    # Remove punctuation, whitespace, and lower case company names #
-    subm$name <- subm$name %>% tolower() %>% removePunctuation() %>% stripWhitespace()
-        
-    ## Remove endings from SEC companies ##
-    for (k in 1:length(endings)){
-        subm$name <- gsub(paste(" ", endings[k], "$", sep = ""), "", subm$name)
-    }
-    # Merge the SEC and CFPB data on cleaned company name #
-    both <- merge(x = subm, y = cfpb, by.x = "name", by.y = "Company")
-        
-    # QC metrics for the merge #
-    merge_percent_companies[i,j] <- length(unique(both$name)) / length(unique(cfpb$Company))
-    merge_percent_of_complaints[i,j] <- sum(cfpb$Company %in% unique(both$name)) / nrow(cfpb)
-        
-    # Merge and store relevant information in new directory #
-    subm_num <- merge(subm, num, by = "adsh")
-    subm_num <- subm_num %>% filter(name %in% companies_of_interest)
-        
-    write.csv(subm_num, file = paste(Y[i], Q[j], "sub_num.csv", sep = ""))
+    if(!file.exists("2015q2sub_num.csv")){
+        for (i in 1:length(Y)){for (j in 1:length(Q)){
+        # Create a temporary directory and download the data #
+        temp <- tempfile()
+        Ye <- Y[i]
+        Qu <- Q[j]
+        set_url <- sec_url(Ye, Qu)
+        download.file(set_url, temp, mode = "wb")
+        unzip(temp) 
+        num <- fread("num.txt", stringsAsFactors = F)
+        subm <- fread("sub.txt", stringsAsFactors = F)
+        # datatag <- fread("tag.txt", stringsAsFactors = F)
+        # pre <- fread("pre.txt", stringsAsFactors = F)
+        unlink(temp)
+            
+        ## Note The SEC website folder http://www.sec.gov/Archives/edgar/data/{cik}/{accession}/ 
+        ## will always contain all the files for a given submission, where {accession} is the adsh 
+        ## with the "-" characters removed.
+            
+        # Remove punctuation, whitespace, and lower case company names #
+        subm$name <- subm$name %>% tolower() %>% removePunctuation() %>% stripWhitespace()
+            
+        ## Remove endings from SEC companies ##
+        for (k in 1:length(endings)){
+            subm$name <- gsub(paste(" ", endings[k], "$", sep = ""), "", subm$name)
+        }
+        # Merge the SEC and CFPB data on cleaned company name #
+        both <- merge(x = subm, y = cfpb, by.x = "name", by.y = "Company")
+            
+        # QC metrics for the merge #
+        merge_percent_companies[i,j] <- length(unique(both$name)) / length(unique(cfpb$Company))
+        merge_percent_of_complaints[i,j] <- sum(cfpb$Company %in% unique(both$name)) / nrow(cfpb)
+            
+        # Merge and store relevant information in new directory #
+        subm_num <- merge(subm, num, by = "adsh")
+        subm_num <- subm_num %>% filter(name %in% companies_of_interest)
+            
+        write.csv(subm_num, file = paste(Y[i], Q[j], "sub_num.csv", sep = ""))
+        }
     }
 }
 
-# Assets #
-assets <- merge(x = subm[, .(adsh, name)], y = num[num$tag=="Assets", .(adsh, tag, value)], by="adsh")
+# Read and bind all SEC files #
+multibind = function(mypath = SEC_database_path, 
+                     year_range = seq(2011, 2015, 1), 
+                     quarter_range = c("q1", "q2", "q3", "q4")){
+    filenames = list.files(path = mypath, full.names=TRUE, pattern = "csv$")
+    datalist = lapply(filenames, function(x){read.csv(file = x, header=T)})
+    Reduce(function(x, y) {rbind(x, y)}, 
+    datalist)
+}
+all_sec <- multibind()
+
+
+# Create Assets Table and write to app data directory #
+assets <- all_sec[all_sec$tag=="Assets" & all_sec$fy %in% c(2015), c("name", "tag", "value", "fy", "fp", "period")]
+write.csv(assets, paste(sub("SEC_database", "app/data/", SEC_database_path), "assets.csv", sep = ""))
+
+assets <- merge(cfpb, assets,
+                by.x = "Company",
+                by.y = "name", allow.cartesian = TRUE)
 
 # Average assets by company #
 average_assets <- assets %>%
-    group_by(name, tag) %>%
+    group_by(Company) %>%
     summarize(assets = mean(value))
 
 sum_cfpb <- cfpb %>%
     group_by(Company) %>%
-    summarize(total = n())
+    summarize(total = n(),
+              timely = sum(`Timely response?`=="Yes"),
+              disputed = sum(`Consumer disputed?`=="Yes")) %>%
+    mutate(percent_timely = timely/total,
+           percent_disputed = disputed/total)
 
 # Complaints standardized by company size in assets #
-both2 <- merge(sum_cfpb, average_assets, by.x = "Company", by.y = "name")
+both2 <- merge(sum_cfpb, average_assets, by = "Company")
 both2 <- within(both2, 
                 standardized <- ((total-mean(total))/sd(total))-((assets-mean(assets))/sd(assets)))
 both2 <- within(both2, 

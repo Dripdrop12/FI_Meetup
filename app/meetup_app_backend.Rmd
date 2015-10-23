@@ -1,0 +1,142 @@
+---
+title: "About This Application's Backend"
+author: "Jonathan Hill"
+date: "October 22, 2015"
+output: html_document
+---
+
+# Overview
+
+This application sources and merges its data from the Consumer Financial Protection Bureau (CFPB) and the U.S. Securities and Exchange Commission (SEC). It uses an API to access the CFPB's [Consumer Complaint Database](http://www.consumerfinance.gov/complaintdatabase/), and it programmatically downloads, unzips and merges [quarterly financial statement data sets](http://www.sec.gov/dera/data/financial-statement-data-sets.html) posted on the SEC website.  After the files have been merged and stored, the backend loads and binds each of the datasets created during the previous step.
+
+The biggest challeges from a data science perspective are:
+
+### 1 - Merging the Data 
+#### (60% at the moment)
+These two data sources do not have a unique identifier, so I had to strip down company name in each data set, then use company name to merge them because there were no other common features.  This resulted in a roughly 60% merge, but there is definitely room for improvement here.  I encourage you to fork my [GitHub repository](https://github.com/Dripdrop12/FI_Meetup) for this project and let me know if you can improve this result.
+
+### 2 - Loading SEC financial statement data
+The SEC 
+
+# CFPB's API
+
+The Consumer Financial Potection Bureau (CFBP) has a very simple API that enables you to pull all of their complaints with the following API:
+
+```
+# Download Consumer Financial Protection Bureau Data #
+if(!file.exists("cfpb.csv")){
+download.file("http://data.consumerfinance.gov/api/views/s6ew-h6mp/rows.csv", "cfpb.csv")
+} 
+cfpb <- fread("cfpb.csv")
+```
+
+For more information on the options available, visit [CFPB Open Tech](http://cfpb.github.io/api/hmda/index.html).
+
+# Financial Statement Data Sets
+
+Without this application's backend procedures, one could manually download and unzip each quarter of data, which include four .txt files (num, pre, sum, tag). However, this function ouputs these files' url from a given year and quarter.
+
+```{r}
+sec_url <- function(Year, Quarter){
+    s = tolower(substitute(Quarter))
+    if(!Year %in% seq(2009, 2015, 1)){
+        warning("SEC data is only available between 2009 and 2015")
+        return(NA)
+    } else if (!s %in% c("q1", "q2", "q3", "q4")){
+        warning("Please enter q1, q2, q3, or q4 for Quarter")
+        return(NA)
+    } else{
+    paste0("http://www.sec.gov/data/financial-statements/", Year, as.character(s), ".zip")
+    }
+}
+sec_url(2011, q3)
+```
+
+This allows you to loop over those parameters and download each quarterly dataset programmatically:
+
+```{r,eval=FALSE}
+# Download SEC Data #
+## Specify the year and quarter of data to download
+Y <- seq(2009, 2015, 1)
+Q <- c("q1", "q2", "q3", "q4")
+merge_percent_companies <- matrix(nrow = length(Y), ncol = length(Q))
+merge_percent_of_complaints <- matrix(nrow = length(Y), ncol = length(Q))
+
+# Create an SEC database by extracting SEC data relevant to CFPB #
+## If the SEC database already exists, do not overwrite it ##
+if(!dir.exists("SEC_database")){
+    dir.create("SEC_database")
+}
+SEC_database_path <- paste(getwd(), "/SEC_database", sep="")
+if(getwd() != SEC_database_path){
+    
+    # Set working directory to SEC_database_path
+    setwd(paste(getwd(), "/SEC_database", sep=""))}
+    if(!file.exists("2015q2sub_num.csv")){
+        for (i in 1:length(Y)){for (j in 1:length(Q)){
+            
+        # Create a temporary directory and download the data #
+        temp <- tempfile()
+        Ye <- Y[i]
+        Qu <- Q[j]
+        set_url <- sec_url(Ye, Qu)
+        download.file(set_url, temp, mode = "wb")
+        unzip(temp)
+        num <- fread("num.txt", stringsAsFactors = F)
+        subm <- fread("sub.txt", stringsAsFactors = F)
+        unlink(temp)
+            
+        # Remove punctuation, whitespace, and lower case company names #
+        subm$name <- subm$name %>% tolower() %>% removePunctuation() %>% stripWhitespace()
+            
+        ## Remove endings from SEC companies ##
+        for (k in 1:length(endings)){
+            subm$name <- gsub(paste(" ", endings[k], "$", sep = ""), "", subm$name)
+        }
+        # Merge the SEC and CFPB data on cleaned company name #
+        both <- merge(x = subm, y = cfpb, by.x = "name", by.y = "Company")
+            
+        # QC metrics for the merge #
+        merge_percent_companies[i,j] <- length(unique(both$name)) / length(unique(cfpb$Company))
+        merge_percent_of_complaints[i,j] <- sum(cfpb$Company %in% unique(both$name)) / nrow(cfpb)
+            
+        # Merge and store relevant information in new directory #
+        subm_num <- merge(subm, num, by = "adsh")
+        subm_num <- subm_num %>% filter(name %in% companies_of_interest)
+            
+        write.csv(subm_num, file = paste(Y[i], Q[j], "sub_num.csv", sep = ""))
+        }
+    }
+}
+
+```
+
+# The Merge
+
+Because there is not a common unique identifier between these datasets, I merged them on a partial match using company name. There were three data cleaning steps:
+
+1. Make company names lowercase
+2. Strip white space
+3. Remove punctuation
+
+```
+cfpb$Company <- cfpb$Company %>% 
+    tolower() %>% 
+    stripWhitespace() %>% 
+    removePunctuation()
+```
+
+### Affiliates and Other Irregularities
+
+The company name on the financial statement
+
+```
+# Specify states and other endings to remove from the end of company names #
+state <- tolower(unique(cfpb$State))
+legal_entity <- c("inc", "corp", "co", "plc", "ltd", "llc", 
+                  "company", "companymn", "holdings", "financial services", "services", 
+                  "financial", "corporation", "group", "bank", "banks")
+endings <- c(state, legal_entity)
+```
+
+
