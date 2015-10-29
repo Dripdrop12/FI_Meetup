@@ -1,0 +1,25 @@
+---
+title: "About This Application's Backend"
+author: "Jonathan Hill"
+date: "October 22, 2015"
+output: html_document
+---
+
+# Overview
+
+This application sources and merges data from the Consumer Financial Protection Bureau (CFPB) and the U.S. Securities and Exchange Commission (SEC). It uses an API to access the CFPB's [Consumer Complaint Database](http://www.consumerfinance.gov/complaintdatabase/), and it programmatically downloads, unzips and merges [quarterly financial statement data sets](http://www.sec.gov/dera/data/financial-statement-data-sets.html) from the SEC.  After the financial statement data have been merged and stored, the backend loads and binds them into one dataset for the application.
+
+The biggest challeges from a data science perspective are:
+
+### 1 - Merging the Data 
+#### (60% at the moment)
+These two data sources do not have a unique identifier, so I had to strip down company name in each data set, then use company name to merge them because there were no other common features.  This resulted in a roughly 60% merge, but there is definitely room for improvement here.  I encourage you to fork my [GitHub repository](https://github.com/Dripdrop12/FI_Meetup) for this project and let me know if you can improve this result.
+
+### 2 - Loading SEC financial statement data
+The SEC 
+
+
+
+
+
+
