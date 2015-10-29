@@ -1,0 +1,34 @@
+---
+title: "About the Merge"
+author: "Jonathan Hill"
+date: "October 28, 2015"
+output: html_document
+---
+
+# The Merge
+
+Because there is not a common unique identifier between these datasets, I merged them on a partial match using company name. There were three data cleaning steps:
+
+1. Make company names lowercase
+2. Strip white space
+3. Remove punctuation
+
+```
+cfpb$Company <- cfpb$Company %>% 
+    tolower() %>% 
+    stripWhitespace() %>% 
+    removePunctuation()
+```
+
+### Affiliates and Other Irregularities
+
+The company name on the financial statement
+
+```
+# Specify states and other endings to remove from the end of company names #
+state <- tolower(unique(cfpb$State))
+legal_entity <- c("inc", "corp", "co", "plc", "ltd", "llc", 
+                  "company", "companymn", "holdings", "financial services", "services", 
+                  "financial", "corporation", "group", "bank", "banks")
+endings <- c(state, legal_entity)
+```
