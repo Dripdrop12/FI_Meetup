@@ -1,0 +1,22 @@
+---
+title: "menus"
+author: "Jonathan Hill"
+date: "October 28, 2015"
+output: html_document
+---
+
+### CFPB
+
+- Contains analyses that can be performed using the consumer complaints database alone.
+
+### SEC
+
+- Demonstrates how using information from financial statements data can augment the analyses possible using the complaints database alone.
+
+### About
+
+- For the inner data scientist in you, this tab walks you through the backend of the application so that you could build it yourself.
+
+#### [GitHub](https://github.com/Dripdrop12/FI_Meetup)
+
+- If you would like to contribute to this project or fork it for your own use, feel free to dig in!
