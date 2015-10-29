@@ -1,0 +1,85 @@
+---
+title: "About the Financial Statements"
+author: "Jonathan Hill"
+date: "October 28, 2015"
+output: html_document
+---
+
+# Financial Statement Data Sets
+
+Without this application's backend procedures, one could manually download and unzip each quarter of data, which include four .txt files (num, pre, sum, tag). However, this function ouputs these files' url from a given year and quarter.
+
+```{r}
+sec_url <- function(Year, Quarter){
+    s = tolower(substitute(Quarter))
+    if(!Year %in% seq(2009, 2015, 1)){
+        warning("SEC data is only available between 2009 and 2015")
+        return(NA)
+    } else if (!s %in% c("q1", "q2", "q3", "q4")){
+        warning("Please enter q1, q2, q3, or q4 for Quarter")
+        return(NA)
+    } else{
+    paste0("http://www.sec.gov/data/financial-statements/", Year, as.character(s), ".zip")
+    }
+}
+sec_url(2011, q3)
+```
+
+This allows you to loop over those parameters and download each quarterly dataset programmatically:
+
+```{r,eval=FALSE}
+# Download SEC Data #
+## Specify the year and quarter of data to download
+Y <- seq(2009, 2015, 1)
+Q <- c("q1", "q2", "q3", "q4")
+merge_percent_companies <- matrix(nrow = length(Y), ncol = length(Q))
+merge_percent_of_complaints <- matrix(nrow = length(Y), ncol = length(Q))
+
+# Create an SEC database by extracting SEC data relevant to CFPB #
+## If the SEC database already exists, do not overwrite it ##
+if(!dir.exists("SEC_database")){
+    dir.create("SEC_database")
+}
+SEC_database_path <- paste(getwd(), "/SEC_database", sep="")
+if(getwd() != SEC_database_path){
+    
+    # Set working directory to SEC_database_path
+    setwd(paste(getwd(), "/SEC_database", sep=""))}
+    if(!file.exists("2015q2sub_num.csv")){
+        for (i in 1:length(Y)){for (j in 1:length(Q)){
+            
+        # Create a temporary directory and download the data #
+        temp <- tempfile()
+        Ye <- Y[i]
+        Qu <- Q[j]
+        set_url <- sec_url(Ye, Qu)
+        download.file(set_url, temp, mode = "wb")
+        unzip(temp)
+        num <- fread("num.txt", stringsAsFactors = F)
+        subm <- fread("sub.txt", stringsAsFactors = F)
+        unlink(temp)
+            
+        # Remove punctuation, whitespace, and lower case company names #
+        subm$name <- subm$name %>% tolower() %>% removePunctuation() %>% stripWhitespace()
+            
+        ## Remove endings from SEC companies ##
+        for (k in 1:length(endings)){
+            subm$name <- gsub(paste(" ", endings[k], "$", sep = ""), "", subm$name)
+        }
+        # Merge the SEC and CFPB data on cleaned company name #
+        both <- merge(x = subm, y = cfpb, by.x = "name", by.y = "Company")
+            
+        # QC metrics for the merge #
+        merge_percent_companies[i,j] <- length(unique(both$name)) / length(unique(cfpb$Company))
+        merge_percent_of_complaints[i,j] <- sum(cfpb$Company %in% unique(both$name)) / nrow(cfpb)
+            
+        # Merge and store relevant information in new directory #
+        subm_num <- merge(subm, num, by = "adsh")
+        subm_num <- subm_num %>% filter(name %in% companies_of_interest)
+            
+        write.csv(subm_num, file = paste(Y[i], Q[j], "sub_num.csv", sep = ""))
+        }
+    }
+}
+
+```
