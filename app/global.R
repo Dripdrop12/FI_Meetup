@@ -6,49 +6,18 @@ library(tm)
 library(ggthemes)
 library(scales)
 library(RColorBrewer)
+library(DT)
 
 # Load the data #
-cfpb <- fread("data/cfpb_clean.csv")
-assets <- fread("data/assets.csv")
-
-# Assets #
-assets <- merge(cfpb, assets,
-                by.x = "Company",
-                by.y = "name", allow.cartesian = TRUE)
-
-# Average assets by company #
-average_assets <- assets %>%
-    group_by(Company) %>%
-    summarize(assets = mean(value))
-
-sum_cfpb <- cfpb %>%
-    group_by(Company) %>%
-    summarize(total = n(),
-              timely = sum(`Timely response?`=="Yes"),
-              disputed = sum(`Consumer disputed?`=="Yes")) %>%
-    mutate(percent_timely = timely/total,
-           percent_disputed = disputed/total)
-
-# Complaints standardized by company size in assets #
-both2 <- merge(sum_cfpb, average_assets, by = "Company")
-both2 <- within(both2, 
-                standardized <- ((total-mean(total))/sd(total))-((assets-mean(assets))/sd(assets)))
-both2 <- within(both2, 
-                z_total <- ((total-mean(total))/sd(total)))
-both2 <- within(both2, 
-                z_assets <- ((assets-mean(assets))/sd(assets)))
-both2 <- within(both2, 
-                rank_total <- frank(-total))
-both2 <- within(both2, 
-                rank_standardized <- frank(-standardized))
-
-both3 <- both2[, .(Company, total, assets, standardized)]
+both2 <- read.csv("data/both2.csv")
+sum_cfpb <- read.csv("data/sum_cfpb.csv")
+both3 <- both2[, c("Company", "total", "assets", "standardized")]
 
 mypallete <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
 
 p1 <- ggplot(data = both2, aes(x=disputed, y = total, color=percent_disputed, size = total)) +
         geom_point()+stat_smooth(method = "lm", level = .99, size=1.5, alpha=.4, color="darkgray")+
-        geom_text(data=both2[rank_total<11,], 
+        geom_text(data=both2[both2$rank_total<11,], 
                   aes(label=Company),hjust=1, vjust=.5, color="black", alpha=.7)+
         scale_colour_gradientn(colours=mypallete(30), limits=c(.10, .33))+
         scale_size_continuous(range=c(4,10))+
@@ -62,7 +31,7 @@ p2 <- ggplot(data = both2, aes(x=assets, y = total, color=standardized, size = z
     geom_point()+stat_smooth(method = "lm", level = .99, size=1.5, alpha=.4, color="darkgray")+
     #geom_text(data=both2[rank_standardized<11,], 
     #aes(label=rank_standardized),hjust=.5, vjust=.5, color="black", alpha=.7)+
-    geom_text(data=both2[rank_standardized<11,], 
+    geom_text(data=both2[both2$rank_standardized<11,], 
               aes(label=Company),hjust=-.1, vjust=.5, color="black", alpha=.7)+
     scale_colour_gradientn(colours=mypallete(30))+
     scale_size_continuous(range=c(4,10))+
