@@ -1,0 +1,20 @@
+---
+title: "CFPB API"
+author: "Jonathan Hill"
+date: "October 28, 2015"
+output: html_document
+---
+
+# CFPB's API
+
+The Consumer Financial Potection Bureau (CFBP) has a very simple API that enables you to pull all of their complaints with the following API:
+
+```
+# Download Consumer Financial Protection Bureau Data #
+if(!file.exists("cfpb.csv")){
+download.file("http://data.consumerfinance.gov/api/views/s6ew-h6mp/rows.csv", "cfpb.csv")
+} 
+cfpb <- fread("cfpb.csv")
+```
+
+For more information on the options available, visit [CFPB Open Tech](http://cfpb.github.io/api/hmda/index.html).
