@@ -1,0 +1,16 @@
+---
+title: "About"
+author: "Jonathan Hill"
+date: "October 28, 2015"
+output: html_document
+---
+
+## Overview
+
+This application was built after a discussion about the CFPB's [consumer complaint database](http://www.consumerfinance.gov/complaintdatabase/) at a recent Meetup in Washington, DC, [Data Science for Agency Initiatives 2015](http://www.meetup.com/Federal-Big-Data-Working-Group/events/222610841/?a=uc1_te&_af=event&_af_eid=222610841&https=off).
+
+The CFPB would like to know if a large number of complaints about a given company is indicative of that company's negligence or its size. Because larger companies service more customers and are likely to be the subject of more complaints, the CFPB is looking for ways to normalize complaints using information about each company in their database. Currently, they can draw an arbitrary cut-off, such as the mean number of complaints per company and judge each company's total number against that baseline, starting at the top and working their way down. Or alternatively, they can look at the ratio of complaints disputed to the total per company and focus on companies with higher dispute rates.
+
+This application demonstrates how the CFPB could incorporate information from each company's financial statement published by the Securities and Exchange Commission (SEC). For example, they could standardize the number of complaints by a company's assets as reported on their balance sheet. They could also drill down further and standardize specific types of complaints against specific line items on the financial statement.
+
+They could also use text mining and machine learning techniques to learn more about people who submit complaints and identify patterns programmatically. This could help them determine if certain groups of people are being serviced poorly, and alternatively, it could help the CFPB fill in gaps in their data.
